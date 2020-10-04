@@ -1,36 +1,46 @@
-import express=require('express');
+import express = require('express');
+import { Tedis, TedisPool } from "tedis";
 import {GlobalData} from "../config/global"
 
-const app:express.Application=express();
-var redis = require('../config/redisutils.ts')
-var global=new GlobalData()
+const app: express.Application = express();
+const redisObj = require('../config/redisutils.ts')
+// 记录 redis和 mongoodb的连接状态,是否连接
+const global=new GlobalData()
 
-var mongoose = require('mongoose')
-var configDB = require('../config/database.ts')
-var client = redis.tedis
 
-client.on('error', function (error:string) {
+const mongoose = require('mongoose')
+const dbconfig = require('../config/database.ts')
+const redisConn: Tedis = redisObj.tedis
+
+// redis connection event
+redisConn.on('error', function (error:string) {
     console.log("redis connection failed")
     global.redisConnected = false;
 })
 
-client.on('connect', function (error:string) {
+redisConn.on('connect', function (error:string) {
     console.log("redis connection done")
     global.redisConnected = true;
 })
 
-mongoose.connect(configDB.url)
+
+mongoose.connect(dbconfig.url)
+// mongoodb connection event
 mongoose.connection.on('error',function(error:any) {
     global.dbConnected = false;
 })
 mongoose.connection.on('connected',function(error:any) {
     global.dbConnected = true;
 })
-app.use(require('body-parser')());
-app.set('view engine', 'ejs')
 
-require("./router.ts")(app,client,global)
-    
+// form body parse
+app.use(require('body-parser')());
+//view engine
+app.set('view engine', 'ejs')
+// route script
+require("./router.ts")(app, redisConn, global)
+
+// start listen
 app.listen(8888,function(){
     console.log('Example app listening on port 8888!');
 })

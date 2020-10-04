@@ -1,7 +1,7 @@
 import express=require('express');
 import { Tedis } from 'tedis';
 import {GlobalData} from "../config/global"
-var ShortUrl = require('../model/url.ts')
+let ShortUrl = require('../model/url.ts')
 const stringRandom = require('string-random');
 
 const urlprefix="http://111.229.246.43:8888/s/";
@@ -10,75 +10,78 @@ module.exports = function (app:express.Application,redis:Tedis, global:GlobalDat
     app.get('/',function(req,res) {
         res.render("index.ejs")
     });
-    app.post('/link/short',async function(req,res){
-        if(req.body.url == null
-            || req.body.url == undefined
-            || req.body.url=="")
-            {
-                return res.send("参数错误").end();
-            }
 
-            if(!req.body.url.toString().startsWith("https://")
-            &&!req.body.url.toString().startsWith("http://"))
-            {
-                return res.send("参数错误").end();
-            }
-        var result = undefined
-        if(global.redisConnected)
-        {
-            result = await redis.get(req.body.url);
+    // short link response
+  app.post('/link/short', async function (req, res) {
+    // validate url param
+    if (req.body.url == null
+      || req.body.url == undefined
+      || req.body.url == "") {
+      return res.send("参数错误").end();
+    }
+
+    // check if it start from https or http
+    // for the moment, only support http because of my own web server
+    if (!req.body.url.toString().startsWith("https://")
+      && !req.body.url.toString().startsWith("http://")) {
+      return res.send("参数错误").end();
+    }
+
+    let result = undefined
+    if (global.redisConnected
+      && redis != null
+      && redis != undefined) {
+      result = await redis.get(req.body.url);
+    }
+
+    // it is not set or not in redis
+    if (result == undefined || result == null || result == "") {
+      // mongoose not ready
+      if (!global.dbConnected) {
+        let url = new ShortUrl();
+        url.shortUrl = urlprefix + stringRandom();
+        url.fullUrl = req.body.url;
+        if (redis != null && redis != undefined) {
+          redis.set(url.fullUrl, url.shortUrl);
+          redis.set(url.shortUrl, url.fullUrl);
         }
-        if(result==undefined||result==null||result=="")
-        {
-            if(!global.dbConnected) {
-                var url = new ShortUrl();
-                url.shortUrl=urlprefix+ stringRandom();
-                url.fullUrl = req.body.url;
-                if(redis!=null&&redis !=undefined)
-                {
-                    redis.set(url.fullUrl,url.shortUrl);
-                    redis.set(url.shortUrl,url.fullUrl);
-                }
-                res.send(url.shortUrl).end();
-                return;
-            }else{
-                console.log("connected");
-                //再查找数据库
-                ShortUrl.findOne({'fullUrl':req.body.url},function(error: any,shorturl: any) {
-                    if(shorturl != null)
-                    {
-                        res.send(shorturl.shortUrl);
-                        return res.end();
-                    }else{
-						console.log("new url entity into db");
-                        //new
-                        var url = new ShortUrl();
-                        url.shortUrl=urlprefix + stringRandom();
-                        url.fullUrl = req.body.url;
-                        if(redis!=null&&redis !=undefined)
-                        {
-                            redis.set(url.fullUrl,url.shortUrl);
-                            redis.set(url.shortUrl,url.fullUrl);
-                        }  
-                        url.save(function(error:any) {
-                            console.log("save "+ error);
-                        })
-
-                        res.send(url.shortUrl);
-                        return res.end();
-                        
-                        
-                    }
-                })
-            }
-            
-            
-        }else{
-            res.send(result)
+        res.send(url.shortUrl).end();
+        return;
+      } else {
+        //search from database
+        ShortUrl.findOne({ 'fullUrl': req.body.url }, function (error: any, shorturl: any) {
+          if (shorturl != null) {
+            res.send(shorturl.shortUrl);
             return res.end();
-        }
-        //res.send(result);
-    });
+          } else {
+            //new
+            let url = new ShortUrl();
+            url.shortUrl = urlprefix + stringRandom();
+            url.fullUrl = req.body.url;
+            if (redis != null
+              && redis != undefined
+              && global.redisConnected) {
+              redis.set(url.fullUrl, url.shortUrl);
+              redis.set(url.shortUrl, url.fullUrl);
+            }
+            url.save(function (error: any) {
+              console.log("save to db:" + error);
+            })
+
+            res.send(url.shortUrl);
+            return res.end();
+
+
+          }
+        })
+      }
+
+
+    } else {
+      res.send(result)
+      return res.end();
+    }
+  });
 
 	
     app.post('/link/full/',async function(req,res){
@@ -94,7 +97,7 @@ module.exports = function (app:express.Application,redis:Tedis, global:GlobalDat
 			return res.send(r).end();
 		});
 		
-        var result = undefined
+        let result = undefined
         if(global.redisConnected)
         {
             result = await redis.get(req.body.url);
@@ -125,7 +128,7 @@ module.exports = function (app:express.Application,redis:Tedis, global:GlobalDat
 
     app.get('/s/:url',function(req,res){
 		//res.send(req.params.url).end();
-		var shorturl = urlprefix+req.params.url;
+		let shorturl = urlprefix+req.params.url;
 		
 		return getfullUrl(shorturl,function(r:string){
 			if(r.startsWith("http"))
